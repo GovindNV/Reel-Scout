@@ -151,6 +151,7 @@
       color: #ff7b7b;
       margin-bottom: 16px;
       display: none;
+      word-wrap: break-word;
     }
     .error-box.show { display: block; }
 
@@ -414,6 +415,7 @@
       line-height: 1.7;
       margin-top: 10px;
       display: none;
+      white-space: pre-wrap; /* Ensures line breaks format correctly */
     }
     .transcript-box.show { display: block; }
   </style>
@@ -424,16 +426,16 @@
 
 <header>
   <div class="wordmark">Reel <em>Scout</em></div>
-  <div class="tagline">Find every place in your Instagram reels</div>
+  <div class="tagline">Find every place in your Instagram posts & reels</div>
 </header>
 
 <main>
 
   <div class="input-card">
-    <div class="input-label">Reel URL</div>
+    <div class="input-label">Instagram URL</div>
     <button class="paste-btn" onclick="pasteFromClipboard()">⌘ Paste from clipboard</button>
-    <input class="url-field" id="urlInput" type="url" placeholder="https://www.instagram.com/reel/..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
-    <button class="analyze-btn" id="analyzeBtn" onclick="analyze()">Analyze reel</button>
+    <input class="url-field" id="urlInput" type="url" placeholder="https://www.instagram.com/p/..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    <button class="analyze-btn" id="analyzeBtn" onclick="analyze()">Analyze post or reel</button>
   </div>
 
   <div class="error-box" id="errorBox"></div>
@@ -443,7 +445,7 @@
       <div class="progress-title">Working on it…</div>
       <div class="step-row">
         <div class="step-icon pending" id="i1">↓</div>
-        <div class="step-label" id="l1">Downloading reel</div>
+        <div class="step-label" id="l1">Downloading media</div>
       </div>
       <div class="step-row">
         <div class="step-icon pending" id="i2">🎙</div>
@@ -483,7 +485,7 @@
 
     <div id="cardList"></div>
 
-    <span class="transcript-toggle" id="transcriptToggle" onclick="toggleTranscript()">Show context</span>
+    <span class="transcript-toggle" id="transcriptToggle" onclick="toggleTranscript()">Show AI Analysis</span>
     <div class="transcript-box" id="transcriptBox"></div>
   </div>
 
@@ -496,8 +498,8 @@
 </main>
 
 <script>
-  // FOOLPROOF FIX: Automatically grabs the domain you are visiting dynamically!
-  const BACKEND_URL = '';
+  // Dynamically uses your Render URL
+  const BACKEND_URL = window.location.origin;
 
   let sessionHistory = [];
   let currentTranscript = '';
@@ -520,7 +522,7 @@
     const url = document.getElementById('urlInput').value.trim();
     if (!url) return;
     if (!url.includes('instagram.com')) {
-      showError('Please enter an Instagram reel URL.');
+      showError('Please enter a valid Instagram URL.');
       return;
     }
 
@@ -556,9 +558,8 @@
 
     } catch (e) {
       let msg = e.message;
-      // Only mask standard browser network errors, do NOT mask backend "Failed" errors
       if (msg === 'Failed to fetch' || msg.includes('NetworkError')) {
-        msg = 'Could not reach the server. Make sure your backend is deployed and the URL in index.html is correct.';
+        msg = 'Could not reach the server. Make sure your backend is running.';
       }
       showError(msg);
       setUIState('idle');
@@ -579,7 +580,7 @@
     list.innerHTML = '';
 
     if (dests.length === 0) {
-      list.innerHTML = '<div class="empty-state"><div class="empty-icon">🗺</div>No destinations found in this reel.</div>';
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">🗺</div>No destinations found in this post.</div>';
     } else {
       dests.forEach((d, i) => {
         const pillClass = d.type === 'travel' ? 'pill-travel' : d.type === 'food' ? 'pill-food' : 'pill-both';
@@ -606,14 +607,14 @@
     document.getElementById('transcriptBox').textContent = currentTranscript;
     document.getElementById('transcriptToggle').style.display = currentTranscript ? 'inline-block' : 'none';
     transcriptVisible = false;
-    document.getElementById('transcriptToggle').textContent = 'Show context';
+    document.getElementById('transcriptToggle').textContent = 'Show AI Analysis';
     document.getElementById('transcriptBox').classList.remove('show');
   }
 
   function toggleTranscript() {
     transcriptVisible = !transcriptVisible;
     document.getElementById('transcriptBox').classList.toggle('show', transcriptVisible);
-    document.getElementById('transcriptToggle').textContent = transcriptVisible ? 'Hide context' : 'Show context';
+    document.getElementById('transcriptToggle').textContent = transcriptVisible ? 'Hide AI Analysis' : 'Show AI Analysis';
   }
 
   function addHistory(url, data) {
@@ -653,7 +654,7 @@
     document.getElementById('resultsSection').classList.toggle('show', state === 'results');
     const btn = document.getElementById('analyzeBtn');
     btn.disabled = state === 'loading';
-    btn.textContent = state === 'loading' ? 'Analysing…' : 'Analyze reel';
+    btn.textContent = state === 'loading' ? 'Analysing…' : 'Analyze post or reel';
     if (state === 'loading') resetSteps();
   }
 
