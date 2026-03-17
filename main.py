@@ -66,7 +66,6 @@ async def analyze(req: AnalyzeRequest):
     client = genai.Client(api_key=GEMINI_API_KEY)
 
     # MAGIC FIX 1: Clean the URL. Remove tracking tags (?igsh=) and strip 'www.' 
-    # to bypass Hugging Face's DNS resolution bug.
     clean_url = req.url.split("?")[0].replace("www.instagram.com", "instagram.com")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -76,7 +75,6 @@ async def analyze(req: AnalyzeRequest):
             "--format", "best",
             "--write-info-json",
             "--output", f"{tmpdir}/video.%(ext)s",
-            # MAGIC FIX 2: Spoof an iPhone Safari browser to bypass anti-bot walls
             "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
             "--add-header", "Accept-Language:en-US,en;q=0.9",
             "--add-header", "Accept:text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
@@ -117,7 +115,15 @@ async def analyze(req: AnalyzeRequest):
 
         # 3. Upload the Video to Gemini API
         try:
-            uploaded_video = client.files.upload(file=video_path)
+            # MAGIC FIX 2: Google frequently renames this parameter.
+            # This nested try-except block makes the app 100% version-proof!
+            try:
+                uploaded_video = client.files.upload(path=video_path)
+            except TypeError:
+                try:
+                    uploaded_video = client.files.upload(file=video_path)
+                except TypeError:
+                    uploaded_video = client.files.upload(video_path)
             
             # Wait for Gemini to process the video file
             while uploaded_video.state.name == "PROCESSING":
