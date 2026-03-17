@@ -447,11 +447,11 @@
       </div>
       <div class="step-row">
         <div class="step-icon pending" id="i2">🎙</div>
-        <div class="step-label" id="l2">Transcribing audio</div>
+        <div class="step-label" id="l2">Analysing visual & audio</div>
       </div>
       <div class="step-row">
         <div class="step-icon pending" id="i3">✦</div>
-        <div class="step-label" id="l3">Analysing with AI</div>
+        <div class="step-label" id="l3">Processing with AI</div>
       </div>
       <div class="step-row">
         <div class="step-icon pending" id="i4">📍</div>
@@ -483,7 +483,7 @@
 
     <div id="cardList"></div>
 
-    <span class="transcript-toggle" id="transcriptToggle" onclick="toggleTranscript()">Show transcript</span>
+    <span class="transcript-toggle" id="transcriptToggle" onclick="toggleTranscript()">Show context</span>
     <div class="transcript-box" id="transcriptBox"></div>
   </div>
 
@@ -496,8 +496,8 @@
 </main>
 
 <script>
-  // Replace this with your actual Railway backend URL after deploying
-  const BACKEND_URL = 'https://YOUR-APP.railway.app';
+  // FOOLPROOF FIX: Automatically grabs the domain you are visiting dynamically!
+  const BACKEND_URL = '';
 
   let sessionHistory = [];
   let currentTranscript = '';
@@ -505,9 +505,13 @@
 
   async function pasteFromClipboard() {
     try {
-      const text = await navigator.clipboard.readText();
-      document.getElementById('urlInput').value = text;
-    } catch {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        document.getElementById('urlInput').value = text;
+      } else {
+        document.getElementById('urlInput').focus();
+      }
+    } catch (err) {
       document.getElementById('urlInput').focus();
     }
   }
@@ -552,7 +556,8 @@
 
     } catch (e) {
       let msg = e.message;
-      if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed')) {
+      // Only mask standard browser network errors, do NOT mask backend "Failed" errors
+      if (msg === 'Failed to fetch' || msg.includes('NetworkError')) {
         msg = 'Could not reach the server. Make sure your backend is deployed and the URL in index.html is correct.';
       }
       showError(msg);
@@ -592,7 +597,7 @@
             <span class="type-pill ${pillClass}">${pillLabel}</span>
           </div>
           ${d.context ? `<div class="dest-context">"${d.context}"</div>` : ''}
-          <a class="maps-btn" href="${mapsUrl}">Open in Maps →</a>
+          <a class="maps-btn" target="_blank" href="${mapsUrl}">Open in Maps →</a>
         `;
         list.appendChild(card);
       });
@@ -601,14 +606,14 @@
     document.getElementById('transcriptBox').textContent = currentTranscript;
     document.getElementById('transcriptToggle').style.display = currentTranscript ? 'inline-block' : 'none';
     transcriptVisible = false;
-    document.getElementById('transcriptToggle').textContent = 'Show transcript';
+    document.getElementById('transcriptToggle').textContent = 'Show context';
     document.getElementById('transcriptBox').classList.remove('show');
   }
 
   function toggleTranscript() {
     transcriptVisible = !transcriptVisible;
     document.getElementById('transcriptBox').classList.toggle('show', transcriptVisible);
-    document.getElementById('transcriptToggle').textContent = transcriptVisible ? 'Hide transcript' : 'Show transcript';
+    document.getElementById('transcriptToggle').textContent = transcriptVisible ? 'Hide context' : 'Show context';
   }
 
   function addHistory(url, data) {
