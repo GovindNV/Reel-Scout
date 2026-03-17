@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Reel Scout" />
+  <meta name="theme-color" content="#0a0a0a" />
+  <title>Reel Scout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --surface: #141414;
+      --surface2: #1e1e1e;
+      --border: rgba(255,255,255,0.08);
+      --border2: rgba(255,255,255,0.15);
+      --text: #f0ede8;
+      --muted: rgba(240,237,232,0.45);
+      --hint: rgba(240,237,232,0.25);
+      --accent: #c8a96e;
+      --accent-dim: rgba(200,169,110,0.12);
+      --travel: #4a9eff;
+      --travel-bg: rgba(74,158,255,0.1);
+      --food: #ff8c42;
+      --food-bg: rgba(255,140,66,0.1);
+      --both: #7ec98a;
+      --both-bg: rgba(126,201,138,0.1);
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      min-height: 100svh;
+      overflow-x: hidden;
+    }
+
+    .status-bar-pad { height: var(--safe-top); }
+
+    header {
+      padding: 20px 24px 0;
+      position: relative;
+    }
+
+    .wordmark {
+      font-family: 'DM Serif Display', serif;
+      font-size: 28px;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+
+    .wordmark em {
+      font-style: italic;
+      color: var(--accent);
+    }
+
+    .tagline {
+      font-size: 13px;
+      color: var(--muted);
+      margin-top: 3px;
+      font-weight: 300;
+      letter-spacing: 0.01em;
+    }
+
+    main { padding: 24px 20px; }
+
+    .input-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border2);
+      border-radius: 20px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    .input-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .url-field {
+      width: 100%;
+      background: var(--surface2);
+      border: 0.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 15px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      color: var(--text);
+      outline: none;
+      -webkit-appearance: none;
+      transition: border-color 0.2s;
+      margin-bottom: 12px;
+    }
+
+    .url-field::placeholder { color: var(--hint); }
+    .url-field:focus { border-color: var(--border2); }
+
+    .analyze-btn {
+      width: 100%;
+      background: var(--accent);
+      color: #0a0a0a;
+      border: none;
+      border-radius: 12px;
+      padding: 15px;
+      font-size: 15px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s, transform 0.1s;
+      letter-spacing: 0.01em;
+    }
+
+    .analyze-btn:active { transform: scale(0.98); opacity: 0.85; }
+    .analyze-btn:disabled { opacity: 0.35; }
+
+    .paste-btn {
+      width: 100%;
+      background: transparent;
+      border: 0.5px solid var(--border2);
+      border-radius: 12px;
+      padding: 13px;
+      font-size: 14px;
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 400;
+      color: var(--muted);
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: background 0.15s;
+    }
+    .paste-btn:active { background: var(--surface2); }
+
+    .error-box {
+      background: rgba(220,60,60,0.12);
+      border: 0.5px solid rgba(220,60,60,0.3);
+      border-radius: 12px;
+      padding: 13px 16px;
+      font-size: 14px;
+      color: #ff7b7b;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error-box.show { display: block; }
+
+    /* Progress */
+    .progress-section {
+      display: none;
+      margin-bottom: 20px;
+    }
+    .progress-section.show { display: block; }
+
+    .progress-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px;
+    }
+
+    .progress-title {
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      letter-spacing: 0.02em;
+    }
+
+    .step-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 6px 0;
+    }
+
+    .step-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      flex-shrink: 0;
+      transition: all 0.3s;
+    }
+    .step-icon.pending { background: var(--surface2); color: var(--hint); }
+    .step-icon.active { background: var(--accent-dim); color: var(--accent); animation: stepPulse 1.2s ease-in-out infinite; }
+    .step-icon.done { background: rgba(126,201,138,0.15); color: var(--both); }
+
+    @keyframes stepPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .step-label {
+      font-size: 14px;
+      color: var(--muted);
+      transition: color 0.3s;
+    }
+    .step-label.active { color: var(--text); }
+    .step-label.done { color: var(--muted); }
+
+    /* Results */
+    .results-section { display: none; }
+    .results-section.show { display: block; }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .results-heading {
+      font-family: 'DM Serif Display', serif;
+      font-size: 20px;
+      color: var(--text);
+    }
+
+    .clear-btn {
+      background: transparent;
+      border: 0.5px solid var(--border2);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-family: 'DM Sans', sans-serif;
+      color: var(--muted);
+      cursor: pointer;
+    }
+
+    .stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 14px;
+      padding: 14px 12px;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-family: 'DM Serif Display', serif;
+      font-size: 26px;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .dest-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+      animation: slideUp 0.3s ease both;
+    }
+
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .dest-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .dest-name {
+      font-family: 'DM Serif Display', serif;
+      font-size: 18px;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .dest-cat {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .type-pill {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 4px 10px;
+      border-radius: 99px;
+      flex-shrink: 0;
+      letter-spacing: 0.03em;
+    }
+
+    .pill-travel { background: var(--travel-bg); color: var(--travel); }
+    .pill-food { background: var(--food-bg); color: var(--food); }
+    .pill-both { background: var(--both-bg); color: var(--both); }
+
+    .dest-context {
+      font-size: 13px;
+      color: var(--muted);
+      font-style: italic;
+      border-left: 2px solid var(--border2);
+      padding-left: 10px;
+      line-height: 1.5;
+    }
+
+    .maps-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--accent);
+      text-decoration: none;
+      padding: 5px 10px;
+      border: 0.5px solid rgba(200,169,110,0.3);
+      border-radius: 8px;
+      background: var(--accent-dim);
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 32px 20px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .empty-icon { font-size: 32px; margin-bottom: 10px; }
+
+    /* History */
+    .history-section { margin-top: 28px; }
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: var(--hint);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 0.5px solid var(--border);
+      cursor: pointer;
+    }
+
+    .history-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+      opacity: 0.6;
+    }
+
+    .history-url {
+      flex: 1;
+      font-size: 13px;
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .history-count {
+      font-size: 12px;
+      color: var(--hint);
+      flex-shrink: 0;
+    }
+
+    .bottom-pad { height: calc(24px + var(--safe-bottom)); }
+
+    /* Transcript toggle */
+    .transcript-toggle {
+      font-size: 12px;
+      color: var(--hint);
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-color: var(--border2);
+      margin-top: 16px;
+      display: inline-block;
+    }
+
+    .transcript-box {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.7;
+      margin-top: 10px;
+      display: none;
+    }
+    .transcript-box.show { display: block; }
+  </style>
+</head>
+<body>
+
+<div class="status-bar-pad"></div>
+
+<header>
+  <div class="wordmark">Reel <em>Scout</em></div>
+  <div class="tagline">Find every place in your Instagram reels</div>
+</header>
+
+<main>
+
+  <div class="input-card">
+    <div class="input-label">Reel URL</div>
+    <button class="paste-btn" onclick="pasteFromClipboard()">⌘ Paste from clipboard</button>
+    <input class="url-field" id="urlInput" type="url" placeholder="https://www.instagram.com/reel/..." autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" />
+    <button class="analyze-btn" id="analyzeBtn" onclick="analyze()">Analyze reel</button>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <div class="progress-section" id="progressSection">
+    <div class="progress-card">
+      <div class="progress-title">Working on it…</div>
+      <div class="step-row">
+        <div class="step-icon pending" id="i1">↓</div>
+        <div class="step-label" id="l1">Downloading reel</div>
+      </div>
+      <div class="step-row">
+        <div class="step-icon pending" id="i2">🎙</div>
+        <div class="step-label" id="l2">Transcribing audio</div>
+      </div>
+      <div class="step-row">
+        <div class="step-icon pending" id="i3">✦</div>
+        <div class="step-label" id="l3">Analysing with AI</div>
+      </div>
+      <div class="step-row">
+        <div class="step-icon pending" id="i4">📍</div>
+        <div class="step-label" id="l4">Extracting destinations</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="results-section" id="resultsSection">
+    <div class="results-header">
+      <div class="results-heading">Destinations</div>
+      <button class="clear-btn" onclick="clearAll()">Clear</button>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-val" id="totalStat">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="travelStat">0</div>
+        <div class="stat-label">Travel</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="foodStat">0</div>
+        <div class="stat-label">Food</div>
+      </div>
+    </div>
+
+    <div id="cardList"></div>
+
+    <span class="transcript-toggle" id="transcriptToggle" onclick="toggleTranscript()">Show transcript</span>
+    <div class="transcript-box" id="transcriptBox"></div>
+  </div>
+
+  <div class="history-section" id="historySection" style="display:none">
+    <div class="section-label">Recent</div>
+    <div id="historyList"></div>
+  </div>
+
+  <div class="bottom-pad"></div>
+</main>
+
+<script>
+  // Replace this with your actual Railway backend URL after deploying
+  const BACKEND_URL = 'https://YOUR-APP.railway.app';
+
+  let sessionHistory = [];
+  let currentTranscript = '';
+  let transcriptVisible = false;
+
+  async function pasteFromClipboard() {
+    try {
+      const text = await navigator.clipboard.readText();
+      document.getElementById('urlInput').value = text;
+    } catch {
+      document.getElementById('urlInput').focus();
+    }
+  }
+
+  async function analyze() {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) return;
+    if (!url.includes('instagram.com')) {
+      showError('Please enter an Instagram reel URL.');
+      return;
+    }
+
+    setUIState('loading');
+    hideError();
+    setStep(1, 'active');
+
+    try {
+      const res = await fetch(`${BACKEND_URL}/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+
+      setStep(1, 'done'); setStep(2, 'active');
+      await wait(300);
+      setStep(2, 'done'); setStep(3, 'active');
+      await wait(300);
+      setStep(3, 'done'); setStep(4, 'active');
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error ${res.status}`);
+      }
+
+      const data = await res.json();
+      setStep(4, 'done');
+      await wait(400);
+
+      currentTranscript = data.transcript || '';
+      addHistory(url, data);
+      showResults(data);
+
+    } catch (e) {
+      let msg = e.message;
+      if (msg.includes('fetch') || msg.includes('network') || msg.includes('Failed')) {
+        msg = 'Could not reach the server. Make sure your backend is deployed and the URL in index.html is correct.';
+      }
+      showError(msg);
+      setUIState('idle');
+    }
+  }
+
+  function showResults(data) {
+    setUIState('results');
+    const dests = data.destinations || [];
+    const travel = dests.filter(d => d.type === 'travel' || d.type === 'both');
+    const food = dests.filter(d => d.type === 'food' || d.type === 'both');
+
+    document.getElementById('totalStat').textContent = dests.length;
+    document.getElementById('travelStat').textContent = travel.length;
+    document.getElementById('foodStat').textContent = food.length;
+
+    const list = document.getElementById('cardList');
+    list.innerHTML = '';
+
+    if (dests.length === 0) {
+      list.innerHTML = '<div class="empty-state"><div class="empty-icon">🗺</div>No destinations found in this reel.</div>';
+    } else {
+      dests.forEach((d, i) => {
+        const pillClass = d.type === 'travel' ? 'pill-travel' : d.type === 'food' ? 'pill-food' : 'pill-both';
+        const pillLabel = d.type === 'travel' ? 'Travel' : d.type === 'food' ? 'Food' : 'Travel & food';
+        const mapsUrl = `https://maps.apple.com/?q=${encodeURIComponent(d.name)}`;
+        const card = document.createElement('div');
+        card.className = 'dest-card';
+        card.style.animationDelay = `${i * 60}ms`;
+        card.innerHTML = `
+          <div class="dest-top">
+            <div>
+              <div class="dest-name">${d.name}</div>
+              <div class="dest-cat">${d.category || ''}</div>
+            </div>
+            <span class="type-pill ${pillClass}">${pillLabel}</span>
+          </div>
+          ${d.context ? `<div class="dest-context">"${d.context}"</div>` : ''}
+          <a class="maps-btn" href="${mapsUrl}">Open in Maps →</a>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    document.getElementById('transcriptBox').textContent = currentTranscript;
+    document.getElementById('transcriptToggle').style.display = currentTranscript ? 'inline-block' : 'none';
+    transcriptVisible = false;
+    document.getElementById('transcriptToggle').textContent = 'Show transcript';
+    document.getElementById('transcriptBox').classList.remove('show');
+  }
+
+  function toggleTranscript() {
+    transcriptVisible = !transcriptVisible;
+    document.getElementById('transcriptBox').classList.toggle('show', transcriptVisible);
+    document.getElementById('transcriptToggle').textContent = transcriptVisible ? 'Hide transcript' : 'Show transcript';
+  }
+
+  function addHistory(url, data) {
+    sessionHistory.unshift({ url, count: (data.destinations || []).length, data });
+    if (sessionHistory.length > 8) sessionHistory.pop();
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const sec = document.getElementById('historySection');
+    const list = document.getElementById('historyList');
+    if (!sessionHistory.length) { sec.style.display = 'none'; return; }
+    sec.style.display = 'block';
+    list.innerHTML = sessionHistory.map((h, i) => `
+      <div class="history-item" onclick="loadHistory(${i})">
+        <div class="history-dot"></div>
+        <div class="history-url">${h.url}</div>
+        <div class="history-count">${h.count} found</div>
+      </div>
+    `).join('');
+  }
+
+  function loadHistory(i) {
+    document.getElementById('urlInput').value = sessionHistory[i].url;
+    currentTranscript = sessionHistory[i].data.transcript || '';
+    showResults(sessionHistory[i].data);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function clearAll() {
+    setUIState('idle');
+    document.getElementById('urlInput').value = '';
+  }
+
+  function setUIState(state) {
+    document.getElementById('progressSection').classList.toggle('show', state === 'loading');
+    document.getElementById('resultsSection').classList.toggle('show', state === 'results');
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = state === 'loading';
+    btn.textContent = state === 'loading' ? 'Analysing…' : 'Analyze reel';
+    if (state === 'loading') resetSteps();
+  }
+
+  function setStep(n, state) {
+    const icon = document.getElementById(`i${n}`);
+    const label = document.getElementById(`l${n}`);
+    icon.className = `step-icon ${state}`;
+    label.className = `step-label ${state}`;
+  }
+
+  function resetSteps() {
+    [1,2,3,4].forEach(n => setStep(n, 'pending'));
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorBox');
+    el.textContent = msg;
+    el.classList.add('show');
+  }
+
+  function hideError() {
+    document.getElementById('errorBox').classList.remove('show');
+  }
+
+  function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') analyze();
+  });
+</script>
+</body>
+</html>
