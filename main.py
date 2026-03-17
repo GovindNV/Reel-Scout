@@ -65,7 +65,7 @@ async def analyze(req: AnalyzeRequest):
 
     client = genai.Client(api_key=GEMINI_API_KEY)
 
-    # MAGIC FIX 1: Clean the URL. Remove tracking tags (?igsh=) and strip 'www.' 
+    # Clean the URL. Remove tracking tags (?igsh=) and strip 'www.' 
     clean_url = req.url.split("?")[0].replace("www.instagram.com", "instagram.com")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -115,8 +115,6 @@ async def analyze(req: AnalyzeRequest):
 
         # 3. Upload the Video to Gemini API
         try:
-            # MAGIC FIX 2: Google frequently renames this parameter.
-            # This nested try-except block makes the app 100% version-proof!
             try:
                 uploaded_video = client.files.upload(path=video_path)
             except TypeError:
@@ -125,13 +123,20 @@ async def analyze(req: AnalyzeRequest):
                 except TypeError:
                     uploaded_video = client.files.upload(video_path)
             
-            # Wait for Gemini to process the video file
-            while uploaded_video.state.name == "PROCESSING":
-                time.sleep(2)
-                uploaded_video = client.files.get(name=uploaded_video.name)
-                
-            if uploaded_video.state.name == "FAILED":
-                raise Exception("Video processing failed inside the Gemini API.")
+            # Wait for Gemini to process the video file with an ultra-safe state checker!
+            while True:
+                current_state = uploaded_video.state
+                # Safely get the status string whether it is an object or a plain string
+                state_str = current_state.name if hasattr(current_state, "name") else str(current_state)
+                state_str = state_str.upper()
+
+                if "PROCESSING" in state_str:
+                    time.sleep(2)
+                    uploaded_video = client.files.get(name=uploaded_video.name)
+                elif "FAILED" in state_str:
+                    raise Exception("Video processing failed inside the Gemini API.")
+                else:
+                    break # Status is "ACTIVE" and ready for analysis
                 
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to upload video to AI: {str(e)}")
