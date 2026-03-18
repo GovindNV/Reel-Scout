@@ -1,6 +1,6 @@
 """
 Reel Scout — Backend API
-FastAPI + yt-dlp + Gemini (Anti-Hallucination Strict OCR Processing)
+FastAPI + yt-dlp + Gemini (Strict Visual OCR, No Audio)
 """
 
 import os
@@ -139,23 +139,23 @@ async def analyze(req: AnalyzeRequest):
             raise HTTPException(status_code=500, detail=f"Failed to upload media to AI: {str(e)}")
 
         # ==========================================
-        # PASS 1: Strict Anti-Hallucination OCR
+        # PASS 1: Strict Visual OCR Only (No Audio)
         # ==========================================
-        prompt_pass_1 = f"""Analyze the attached media files (video/images) and the text description below.
+        prompt_pass_1 = f"""I have provided media files (video/images) directly in this API request payload.
 
         Description:
         \"\"\"{description}\"\"\"
 
-        CRITICAL MULTI-LINGUAL OCR & AUDIO TASK:
-        You are a strict, literal transcription and OCR machine. You must NOT hallucinate, guess, or invent locations.
-        1. Scan the video frame-by-frame for ANY text overlays (especially in Malayalam, Hindi, or Tamil).
-        2. Listen to the audio for spoken location names.
-        3. Extract the EXACT text you see on screen and hear in the audio.
+        CRITICAL MULTI-LINGUAL OCR TASK:
+        You are a strict, literal Optical Character Recognition (OCR) machine. You must NOT hallucinate, guess, or invent locations.
+        1. Scan the provided video frame-by-frame for ANY text overlays (especially in Malayalam, Hindi, or Tamil).
+        2. IGNORE the audio track completely. We only care about what is visually written on screen or in the description.
+        3. Extract the EXACT text you see flashing on the screen.
         4. Transliterate local scripts into English (e.g., "കൊടികുത്തിമല" -> "Kodikuthimala").
 
-        Output a strict list of EXACTLY what text appeared on screen and exactly what was spoken. 
-        DO NOT describe the scenery (like "misty hills", "waterfalls", or "houseboats"). ONLY output the detected text and speech.
-        If a place is not literally written on the screen or spoken in the audio, DO NOT include it. Zero hallucinations."""
+        Output a strict list of EXACTLY what text appeared on screen visually. 
+        DO NOT describe the scenery (like "misty hills", "waterfalls", or "houseboats"). ONLY output the detected text.
+        If a place is not literally written on the screen or in the description, DO NOT include it. Zero hallucinations."""
 
         try:
             contents = uploaded_media + [prompt_pass_1]
@@ -163,8 +163,7 @@ async def analyze(req: AnalyzeRequest):
                 model="gemini-2.5-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
-                    # MAGIC FIX: The ultimate strict system instruction
-                    system_instruction="You are a strict OCR and audio transcription AI. You must read the actual text in the video frames and listen to the actual audio. Never hallucinate or invent locations based on the description. Output only literal transliterated text and speech."
+                    system_instruction="You are a strict visual OCR AI executing via an API. Video and image files are directly provided to you. You have full vision capabilities. Ignore any audio tracks. Never state that you cannot view media. Output only literal transliterated text from the visual frames and the text description."
                 )
             )
             ai_commentary = response_pass_1.text.strip()
@@ -183,9 +182,9 @@ async def analyze(req: AnalyzeRequest):
         # ==========================================
         # PASS 2: JSON Formatting Extraction
         # ==========================================
-        prompt_pass_2 = f"""You are a data extractor. Convert the following OCR and transcription notes into a strict JSON object.
+        prompt_pass_2 = f"""You are a data extractor. Convert the following OCR notes into a strict JSON object.
 
-        Transcription Notes:
+        OCR Notes:
         \"\"\"{ai_commentary}\"\"\"
 
         Return ONLY a JSON object with this EXACT structure:
@@ -195,7 +194,7 @@ async def analyze(req: AnalyzeRequest):
               "name": "Name of place (in English)",
               "type": "travel|food|both",
               "category": "e.g. Restaurant, Cafe, City, Beach, Street Food, Market, Island, Temple, Park, Hotel, Country",
-              "context": "Short context (e.g., 'Written on screen in Malayalam' or 'Spoken in audio')"
+              "context": "Short context (e.g., 'Written on screen in Malayalam' or 'Found in description')"
             }}
           ]
         }}
@@ -224,7 +223,7 @@ async def analyze(req: AnalyzeRequest):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"AI extraction (Pass 2) failed: {str(e)}")
 
-    display_transcript = f"AI RAW TRANSCRIPT:\n{ai_commentary}"
+    display_transcript = f"AI RAW OCR TRANSCRIPT:\n{ai_commentary}"
 
     return AnalyzeResponse(
         url=req.url,
