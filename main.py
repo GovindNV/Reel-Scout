@@ -1,6 +1,6 @@
 """
 Reel Scout — Backend API
-FastAPI + yt-dlp + Gemini (Two-Pass Native Processing with System Override)
+FastAPI + yt-dlp + Gemini (Multi-lingual OCR & Translation)
 """
 
 import os
@@ -139,19 +139,22 @@ async def analyze(req: AnalyzeRequest):
             raise HTTPException(status_code=500, detail=f"Failed to upload media to AI: {str(e)}")
 
         # ==========================================
-        # PASS 1: The Natural Analysis (System Override)
+        # PASS 1: Multi-Lingual Translation & Extraction
         # ==========================================
         prompt_pass_1 = f"""Analyze the attached media files (video/images) and the text description below.
 
         Description:
         \"\"\"{description}\"\"\"
 
-        Task:
-        1. Watch the video frames and read any text overlays on the screen.
-        2. Listen closely to the spoken audio track.
-        3. Read the description.
-        4. Provide a detailed, conversational commentary listing EVERY travel destination, restaurant, city, or food spot mentioned.
-        5. Be specific about WHERE you found it (e.g., "The narrator said...", "The text on screen showed...", "The caption mentions...")."""
+        CRITICAL MULTI-LINGUAL OCR & AUDIO TASK:
+        1. The video contains spoken audio and on-screen text overlays that are likely in local Indian languages (like Malayalam, Hindi, Tamil) or other global languages.
+        2. You MUST perform Optical Character Recognition (OCR) to read the non-English text overlays appearing on the screen.
+        3. You MUST listen to the non-English audio.
+        4. TRANSLATE and TRANSLITERATE all found location names into English text.
+        
+        Provide a detailed, conversational commentary listing EVERY travel destination, hidden spot, or restaurant mentioned.
+        Be highly specific about WHERE you found it (e.g., "The Malayalam text on screen showed 'Kodikuthimala'", "The person said...").
+        Do not skip any text overlays!"""
 
         try:
             contents = uploaded_media + [prompt_pass_1]
@@ -159,8 +162,7 @@ async def analyze(req: AnalyzeRequest):
                 model="gemini-2.5-flash",
                 contents=contents,
                 config=types.GenerateContentConfig(
-                    # MAGIC FIX: Aggressively override the AI's safety filters so it doesn't pretend it can't see!
-                    system_instruction="You are an advanced multimodal AI. You CAN and MUST process the attached video, audio, and image files. Do not output any disclaimers or apologies about being an AI that cannot view media. Analyze the media directly and fulfill the user's request."
+                    system_instruction="You are an advanced multimodal AI. You CAN and MUST process the attached video, audio, and image files. Do not output any disclaimers about being an AI. Translate all foreign language text overlays and audio into English. Analyze the media directly and fulfill the user's request."
                 )
             )
             ai_commentary = response_pass_1.text.strip()
@@ -171,7 +173,7 @@ async def analyze(req: AnalyzeRequest):
                 except: pass
             raise HTTPException(status_code=500, detail=f"AI analysis (Pass 1) failed: {str(e)}")
 
-        # Clean up the heavy media files immediately after Pass 1 is done!
+        # Clean up files immediately after Pass 1 is done
         for uv in uploaded_media:
             try: client.files.delete(name=uv.name)
             except: pass
@@ -188,7 +190,7 @@ async def analyze(req: AnalyzeRequest):
         {{
           "destinations": [
             {{
-              "name": "Name of place",
+              "name": "Name of place (in English)",
               "type": "travel|food|both",
               "category": "e.g. Restaurant, Cafe, City, Beach, Street Food, Market, Island, Temple, Park, Hotel, Country",
               "context": "Short context on how it was mentioned based on the commentary"
@@ -220,7 +222,6 @@ async def analyze(req: AnalyzeRequest):
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"AI extraction (Pass 2) failed: {str(e)}")
 
-    # We show the user the pure conversational text from Pass 1 when they click "Show AI Analysis"
     display_transcript = f"AI COMMENTARY:\n{ai_commentary}"
 
     return AnalyzeResponse(
