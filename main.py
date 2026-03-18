@@ -1,6 +1,6 @@
 """
 Reel Scout — Backend API
-FastAPI + yt-dlp + Gemini (Native Video & Audio Processing)
+FastAPI + yt-dlp + Gemini (Two-Pass Native Processing)
 """
 
 import os
@@ -65,14 +65,14 @@ async def analyze(req: AnalyzeRequest):
 
     client = genai.Client(api_key=GEMINI_API_KEY)
 
-    # Clean the URL. Remove tracking tags (?igsh=) and strip 'www.' 
+    # Clean the URL
     clean_url = req.url.split("?")[0].replace("www.instagram.com", "instagram.com")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        # 1. Download the Media (Video or Images) and the JSON Metadata
+        # 1. Download the Media
         cmd = [
             "yt-dlp",
-            "--format", "best",
+            "--merge-output-format", "mp4",
             "--write-info-json",
             "--output", f"{tmpdir}/media_%(autonumber)s.%(ext)s",
             "--user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1",
@@ -88,8 +88,6 @@ async def analyze(req: AnalyzeRequest):
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
         
         files = os.listdir(tmpdir)
-        
-        # Gather all valid media files (mp4s, jpgs, webp)
         media_files = [f for f in files if f.startswith("media_") and not f.endswith(".json") and not f.endswith(".part") and not f.endswith(".ytdl")]
         media_files.sort()
 
@@ -99,7 +97,7 @@ async def analyze(req: AnalyzeRequest):
                 detail=f"Could not download media. It may be private, a protected photo carousel, or unavailable. ({result.stderr[:200]})"
             )
         
-        # 2. Extract the post description from the metadata
+        # 2. Extract description
         description = ""
         info_files = [f for f in files if f.endswith(".json")]
         if info_files:
@@ -110,10 +108,9 @@ async def analyze(req: AnalyzeRequest):
             except Exception:
                 pass
 
-        # 3. Upload all Media to Gemini API
+        # 3. Upload Media
         uploaded_media = []
         try:
-            # We cap it at 5 items so massive photo carousels don't overload the API
             for mf in media_files[:5]:
                 file_path = os.path.join(tmpdir, mf)
                 try:
@@ -124,7 +121,6 @@ async def analyze(req: AnalyzeRequest):
                     except TypeError:
                         uv = client.files.upload(file_path)
                 
-                # Check if state exists. Videos need processing time, but images process instantly!
                 if hasattr(uv, "state") and uv.state is not None:
                     while True:
                         current_state = uv.state
@@ -137,56 +133,74 @@ async def analyze(req: AnalyzeRequest):
                         elif "FAILED" in state_str:
                             raise Exception("Media processing failed inside the Gemini API.")
                         else:
-                            break # Status is "ACTIVE" and ready for analysis
-                
+                            break
                 uploaded_media.append(uv)
-                
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Failed to upload media to AI: {str(e)}")
 
-        # 4. Analyze Visuals + Audio + Description simultaneously using CHAIN OF THOUGHT
-        prompt = f"""You are a travel and food destination extractor.
-I have attached media files (a video reel or images) from an Instagram post.
+        # ==========================================
+        # PASS 1: The Natural Analysis (Your Idea!)
+        # ==========================================
+        prompt_pass_1 = f"""I have directly uploaded media files (a video reel or images) from an Instagram post.
+        
+        Please WATCH the media closely, LISTEN to the audio, and read this post description:
+        \"\"\"{description}\"\"\"
 
-CRITICAL INSTRUCTIONS:
-1. DO NOT read the description yet. First, WATCH the video and LISTEN closely to the audio. 
-2. Write down exactly what you hear in the audio and read any text written on the screen.
-3. Then, read this post description to supplement your findings:
-\"\"\"{description}\"\"\"
-
-Extract every travel destination and food spot mentioned (including restaurants, cafes, cities, beaches, landmarks, street food spots, markets, countries, and any named place).
-
-Return ONLY a JSON object with this EXACT structure (the media_summary forces you to process the video!):
-{{
-  "media_summary": "A detailed summary of exactly what you saw on the screen and heard in the audio track.",
-  "destinations": [
-    {{
-      "name": "Name of place",
-      "type": "travel|food|both",
-      "category": "e.g. Restaurant, Cafe, City, Beach, Street Food, Market, Island, Temple, Park, Hotel, Country",
-      "context": "Short context on how it was mentioned (e.g., 'Spoken in audio', 'Shown on screen text', or 'Found in description')"
-    }}
-  ]
-}}
-
-Rules:
-- type "food": restaurants, cafes, street food, food markets, specific dishes tied to a place
-- type "travel": cities, countries, landmarks, beaches, parks, islands, temples, hotels
-- type "both": famous food destinations that are also travel spots
-- If nothing relevant is mentioned, return {{"destinations": []}}
-- Do not invent or hallucinate places."""
+        I want you to comment and list out all the locations mentioned in this video and description. 
+        Explain exactly where they are mentioned (e.g., spoken, written on screen, or in the caption). 
+        Be thorough and conversational."""
 
         try:
-            # Send all uploaded media items along with the prompt
-            contents = uploaded_media + [prompt]
-            response = client.models.generate_content(
+            contents = uploaded_media + [prompt_pass_1]
+            response_pass_1 = client.models.generate_content(
                 model="gemini-2.5-flash",
-                contents=contents,
+                contents=contents
+            )
+            ai_commentary = response_pass_1.text.strip()
+            
+        except Exception as e:
+            # Clean up files before raising error
+            for uv in uploaded_media:
+                try: client.files.delete(name=uv.name)
+                except: pass
+            raise HTTPException(status_code=500, detail=f"AI analysis (Pass 1) failed: {str(e)}")
+
+        # Clean up the heavy media files immediately after Pass 1 is done!
+        for uv in uploaded_media:
+            try: client.files.delete(name=uv.name)
+            except: pass
+
+        # ==========================================
+        # PASS 2: JSON Formatting Extraction
+        # ==========================================
+        prompt_pass_2 = f"""You are a data extractor. Convert the following AI commentary into a strict JSON object.
+
+        Commentary to convert:
+        \"\"\"{ai_commentary}\"\"\"
+
+        Return ONLY a JSON object with this EXACT structure:
+        {{
+          "destinations": [
+            {{
+              "name": "Name of place",
+              "type": "travel|food|both",
+              "category": "e.g. Restaurant, Cafe, City, Beach, Street Food, Market, Island, Temple, Park, Hotel, Country",
+              "context": "Short context on how it was mentioned based on the commentary"
+            }}
+          ]
+        }}
+        
+        If no relevant places are mentioned in the commentary, return {{"destinations": []}}."""
+
+        try:
+            response_pass_2 = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=[prompt_pass_2],
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
                 )
             )
-            raw = response.text.strip()
+            raw = response_pass_2.text.strip()
             if "```" in raw:
                 raw = raw.split("```")[1]
                 if raw.startswith("json"):
@@ -194,22 +208,14 @@ Rules:
             raw = raw.strip()
             data = json.loads(raw)
             destinations = data.get("destinations", [])
-            media_summary = data.get("media_summary", "(No video/audio summary generated)")
             
         except json.JSONDecodeError:
-            raise HTTPException(status_code=500, detail="AI returned malformed JSON. Please try again.")
+            raise HTTPException(status_code=500, detail="AI returned malformed JSON during extraction. Please try again.")
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
-        finally:
-            # Always clean up all the files from Gemini's server
-            for uv in uploaded_media:
-                try:
-                    client.files.delete(name=uv.name)
-                except:
-                    pass
+            raise HTTPException(status_code=500, detail=f"AI extraction (Pass 2) failed: {str(e)}")
 
-    # We now display the AI's actual video/audio analysis AND the description side-by-side
-    display_transcript = f"AI MEDIA ANALYSIS:\n{media_summary}\n\nPOST DESCRIPTION:\n{description}" if description else f"AI MEDIA ANALYSIS:\n{media_summary}"
+    # We show the user the pure conversational text from Pass 1 when they click "Show AI Analysis"
+    display_transcript = f"AI COMMENTARY:\n{ai_commentary}"
 
     return AnalyzeResponse(
         url=req.url,
