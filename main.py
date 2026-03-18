@@ -1,6 +1,6 @@
 """
 Reel Scout — Backend API
-FastAPI + yt-dlp + Gemini (Two-Pass Native Processing)
+FastAPI + yt-dlp + Gemini (Two-Pass Native Processing with System Override)
 """
 
 import os
@@ -139,27 +139,33 @@ async def analyze(req: AnalyzeRequest):
             raise HTTPException(status_code=500, detail=f"Failed to upload media to AI: {str(e)}")
 
         # ==========================================
-        # PASS 1: The Natural Analysis (Your Idea!)
+        # PASS 1: The Natural Analysis (System Override)
         # ==========================================
-        prompt_pass_1 = f"""I have directly uploaded media files (a video reel or images) from an Instagram post.
-        
-        Please WATCH the media closely, LISTEN to the audio, and read this post description:
+        prompt_pass_1 = f"""Analyze the attached media files (video/images) and the text description below.
+
+        Description:
         \"\"\"{description}\"\"\"
 
-        I want you to comment and list out all the locations mentioned in this video and description. 
-        Explain exactly where they are mentioned (e.g., spoken, written on screen, or in the caption). 
-        Be thorough and conversational."""
+        Task:
+        1. Watch the video frames and read any text overlays on the screen.
+        2. Listen closely to the spoken audio track.
+        3. Read the description.
+        4. Provide a detailed, conversational commentary listing EVERY travel destination, restaurant, city, or food spot mentioned.
+        5. Be specific about WHERE you found it (e.g., "The narrator said...", "The text on screen showed...", "The caption mentions...")."""
 
         try:
             contents = uploaded_media + [prompt_pass_1]
             response_pass_1 = client.models.generate_content(
                 model="gemini-2.5-flash",
-                contents=contents
+                contents=contents,
+                config=types.GenerateContentConfig(
+                    # MAGIC FIX: Aggressively override the AI's safety filters so it doesn't pretend it can't see!
+                    system_instruction="You are an advanced multimodal AI. You CAN and MUST process the attached video, audio, and image files. Do not output any disclaimers or apologies about being an AI that cannot view media. Analyze the media directly and fulfill the user's request."
+                )
             )
             ai_commentary = response_pass_1.text.strip()
             
         except Exception as e:
-            # Clean up files before raising error
             for uv in uploaded_media:
                 try: client.files.delete(name=uv.name)
                 except: pass
